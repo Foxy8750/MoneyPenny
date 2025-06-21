@@ -1,0 +1,53 @@
+##Input is file location of the image you want processed
+
+import cv2
+import numpy as numpy
+import matplotlib.pyplot as plt
+import os
+from aspose.svg import *
+from aspose.svg import converters
+from aspose.svg import drawing
+from aspose.svg.rendering.image import *
+from aspose.svg import imagevectorization
+
+def processImage(image):
+    img = cv2.imread(image, 0)## Creating a laplacian, sobel##(1, 0) - > horizontal and(0, 1) - > vertical
+    laplacian = cv2.Laplacian(img, cv2.CV_64F)
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize = 5)
+    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize = 5)## Plotting images## With gray scale
+    images = [img, laplacian, sobelx, sobely]
+    titles = ['Original', 'Laplacian', 'SobelX', 'SobelY']
+    for i in range(4):
+        plt.subplot(2, 3, (i + 1))
+        plt.imshow(images[i], cmap = 'gray')
+        plt.title(titles[i])
+        plt.show()## Without gray scale
+    for i in range(4):
+        plt.subplot(2, 3, (i + 1))
+        plt.imshow(images[i])
+        plt.title(titles[i])
+            
+def Vectorize(final_image):
+    # Setup directories
+    input_folder = "data/"
+    output_folder = "output/"
+    src_file = final_image
+    output_file = "fish-vectorized.svg" ##FIX THIS
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Configuration for vectorization
+    path_builder = BezierPathBuilder()
+    path_builder.trace_smoother = ImageTraceSmoother(3)
+    path_builder.error_threshold = 10.0
+    path_builder.max_iterations = 20
+
+    vectorizer = ImageVectorizer()
+    vectorizer.configuration.path_builder = path_builder
+    vectorizer.configuration.colors_limit = 3
+    vectorizer.configuration.line_width = 1.5
+
+    # Vectorize an image
+    with vectorizer.vectorize(os.path.join(input_folder, src_file)) as document:
+        output_file = os.path.join(output_folder, output_file)
+        document.save(output_file)
