@@ -7,7 +7,7 @@ import os
 from aspose.svg import *
 from aspose.svg import converters
 from aspose.svg import drawing
-from aspose.svg.rendering.image import *
+from aspose.svg.rendering import image
 from aspose.svg import imagevectorization
 
 def processImage(image):
