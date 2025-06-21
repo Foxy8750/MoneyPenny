@@ -51,3 +51,5 @@ def Vectorize(final_image):
     with vectorizer.vectorize(os.path.join(input_folder, src_file)) as document:
         output_file = os.path.join(output_folder, output_file)
         document.save(output_file)
+
+processImage("Images\data\GenericFace.avif")
