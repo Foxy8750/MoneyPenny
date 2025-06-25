@@ -1,55 +1,62 @@
 ##Input is file location of the image you want processed
 
 import cv2
-import numpy as numpy
-import matplotlib.pyplot as plt
-import os
-from aspose.svg import *
-from aspose.svg import converters
-from aspose.svg import drawing
-from aspose.svg.rendering import image
-from aspose.svg import imagevectorization
+import numpy as np
+import svgwrite
 
 def processImage(image):
-    img = cv2.imread(image, 0)## Creating a laplacian, sobel##(1, 0) - > horizontal and(0, 1) - > vertical
-    laplacian = cv2.Laplacian(img, cv2.CV_64F)
-    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize = 5)
-    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize = 5)## Plotting images## With gray scale
-    images = [img, laplacian, sobelx, sobely]
-    titles = ['Original', 'Laplacian', 'SobelX', 'SobelY']
-    for i in range(4):
-        plt.subplot(2, 3, (i + 1))
-        plt.imshow(images[i], cmap = 'gray')
-        plt.title(titles[i])
-        plt.show()## Without gray scale
-    for i in range(4):
-        plt.subplot(2, 3, (i + 1))
-        plt.imshow(images[i])
-        plt.title(titles[i])
+    #Create the contoured vector image
+    img = cv2.imread(image, 0)
+    img = cv2.bilateralFilter(img,3,75,75)
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize = 3)
+    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize = 3)## Plotting images## With gray scale
+    gradient_magnitude = cv2.magnitude(sobelx, sobely)
+    gradient_magnitude = cv2.convertScaleAbs(gradient_magnitude)
+    gradient_magnitude = cv2.bitwise_not(gradient_magnitude)
+    _, thresh = cv2.threshold(gradient_magnitude, 220, 255, cv2.THRESH_BINARY) #Was 212
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    vectorized_image = np.zeros_like(img)
+    cv2.drawContours(vectorized_image, contours, -1, (255,255,255), 1)
+    vectorized_image = cv2.bitwise_not(vectorized_image)
+    
+    
+    #cv2.imshow("Sobel Edge Detection", thresh)
+    #cv2.imshow("Vectorized Image", vectorized_image)
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+    #Prepare an SVG file
+    height, width = img.shape
+    dwg = svgwrite.Drawing('Images\output\output.svg', profile='tiny', size=(width, height))
+
+    ####MUST RESIZE IMAGE CORRECTLY
+
+    #Write each contour as a path
+    for cnt in contours:
+        # Turn each contour into a list of point tuples
+        points = cnt.reshape(-1, 2).tolist()
+
+        # Move to the first point
+        path_data = f'M {points[0][0]} {points[0][1]} '
+        # Draw lines to the remaining points
+        path_data += ' '.join([f'L {x} {y}' for x, y in points[1:]])
+        path_data += ' Z'  # close the path
+
+        # Add the path to the SVG
+        dwg.add(
+            dwg.path(
+                d=path_data,
+                fill='white',
+                stroke='none'
+            )
+        )
+
+    # 6. Save the file
+    dwg.save()
             
-def Vectorize(final_image):
-    # Setup directories
-    input_folder = "data/"
-    output_folder = "output/"
-    src_file = final_image
-    output_file = "fish-vectorized.svg" ##FIX THIS
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
 
-    # Configuration for vectorization
-    path_builder = BezierPathBuilder()
-    path_builder.trace_smoother = ImageTraceSmoother(3)
-    path_builder.error_threshold = 10.0
-    path_builder.max_iterations = 20
+processImage("Images\data\GenericFace.png")
 
-    vectorizer = ImageVectorizer()
-    vectorizer.configuration.path_builder = path_builder
-    vectorizer.configuration.colors_limit = 3
-    vectorizer.configuration.line_width = 1.5
 
-    # Vectorize an image
-    with vectorizer.vectorize(os.path.join(input_folder, src_file)) as document:
-        output_file = os.path.join(output_folder, output_file)
-        document.save(output_file)
-
-processImage("Images\data\GenericFace.avif")
