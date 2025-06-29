@@ -23,13 +23,13 @@ def processImage(image):
     #cv2.imshow("Sobel Edge Detection", thresh)
     #cv2.imshow("Vectorized Image", vectorized_image)
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
 
 
     #Prepare an SVG file
     height, width = img.shape
-    dwg = svgwrite.Drawing('Images\output\output.svg', profile='tiny', size=(width, height))
+    dwg = svgwrite.Drawing('Images\\output\\output.svg', profile='tiny', size=(width, height))
 
     ####MUST RESIZE IMAGE CORRECTLY
 
@@ -57,6 +57,6 @@ def processImage(image):
     dwg.save()
             
 
-processImage("Images\data\GenericFace.png")
+processImage("Images\\data\\GenericFace.png")
 
 
