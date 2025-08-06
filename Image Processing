@@ -1,37 +1,61 @@
-##Input is file location of the image you want processed
-
+##Imports for image processing
 import cv2
 import numpy as np
 import svgwrite
+#from svg_to_gcode.svg_parser import parse_file
+#from svg_to_gcode.compiler import Compiler, interfaces
 
+##Imports for GUI
+import tkinter as tk
+from tkinter import filedialog
+from PIL import Image, ImageTk 
+import cairosvg
+import os
+
+
+##Strips png file to its most important details and the converts it to an SVG file
 def processImage(image):
-    #Create the contoured vector image
+    ##Loads grayscale image and smoothes it
     img = cv2.imread(image, 0)
-    img = cv2.bilateralFilter(img,3,75,75)
-    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize = 3)
-    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize = 3)## Plotting images## With gray scale
+    img = cv2.bilateralFilter(img, 3, 75, 75)
+
+    ## Compute gradient in X and Y direction
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
+
+    ##Computes gradient magnitude
     gradient_magnitude = cv2.magnitude(sobelx, sobely)
-    gradient_magnitude = cv2.convertScaleAbs(gradient_magnitude)
+    gradient_magnitude = cv2.convertScaleAbs(gradient_magnitude)  # Convert to 8-bit
+
+    ##Inverts gradient to make edges dark
     gradient_magnitude = cv2.bitwise_not(gradient_magnitude)
-    _, thresh = cv2.threshold(gradient_magnitude, 220, 255, cv2.THRESH_BINARY) #Was 212
+
+    ##Threshold which creates a binary image of edges
+    _, thresh = cv2.threshold(gradient_magnitude, 150, 255, cv2.THRESH_BINARY)
+
+    ##Finds contours
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    ##Draws contours onto blank canvas
     vectorized_image = np.zeros_like(img)
-    cv2.drawContours(vectorized_image, contours, -1, (255,255,255), 1)
+    cv2.drawContours(vectorized_image, contours, -1, (255, 255, 255), 1)
+
+    ##Inverts the image (makes contours black on white background)
     vectorized_image = cv2.bitwise_not(vectorized_image)
-    
-    
-    #cv2.imshow("Sobel Edge Detection", thresh)
-    #cv2.imshow("Vectorized Image", vectorized_image)
 
-    #cv2.waitKey(0)
-    #cv2.destroyAllWindows()
-
-
-    #Prepare an SVG file
+    ##Prepares an SVG file
     height, width = img.shape
-    dwg = svgwrite.Drawing('Images\\output\\output.svg', profile='tiny', size=(width, height))
+    dwg = svgwrite.Drawing('Images\\output\\output.svg', profile='tiny', size=(height, width))
 
-    ####MUST RESIZE IMAGE CORRECTLY
+    ##Creates appropriate image scale
+    x, y, w, h = cv2.boundingRect(np.vstack(contours))
+
+    scale_x = 100.0 / w
+    scale_y = 45.0 / h
+    scale = min(scale_x, scale_y)
+
+    offset_x = (100 - (w * scale)) / 2.0
+    offset_y = (45 - (h * scale)) / 2.0
 
     #Write each contour as a path
     for cnt in contours:
@@ -55,8 +79,111 @@ def processImage(image):
 
     # 6. Save the file
     dwg.save()
-            
 
-processImage("Images\\data\\GenericFace.png")
+    with open("Images\\output\\output.gcode", "w") as f:
+        f.write("G90 ; Absolute positioning\n")
+        f.write("G21 ; Set units to mm\n")
+        f.write("G1 F100 ; Set feedrate\n")
+
+        for contour in contours:
+            scaled_points = []
+            for pt in contour:
+                x_pt = (pt[0][0] - x) * scale + offset_x
+                y_pt = (pt[0][1] - y) * scale + offset_y
+                scaled_points.append((x_pt, y_pt))
+
+            if not scaled_points:
+                continue
+
+            # Move to start of contour
+            x0, y0 = scaled_points[0]
+            f.write(f"G0 X{x0:.2f} Y{y0:.2f}\n")  # Rapid move
+
+            for x_pt, y_pt in scaled_points[1:]:
+                f.write(f"G1 X{x_pt:.2f} Y{y_pt:.2f}\n")  # Linear move
+
+
+
+
+
+
+##Create GUI
+# === GUI Setup ===
+root = tk.Tk()
+root.title("Image to SVG Viewer")
+root.geometry("800x500")
+
+# === Left Frame ===
+left_frame = tk.Frame(root, width=400, bg="lightgray")
+left_frame.pack(side=tk.LEFT, fill=tk.Y)
+
+selected_image_path = tk.StringVar()
+
+def select_file():
+    path = filedialog.askopenfilename(
+        filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp")]
+    )
+    if path:
+        selected_image_path.set(path)
+        image_label.config(text=os.path.basename(path))
+
+def handle_process():
+    img_path = selected_image_path.get()
+    if not img_path:
+        return
+    processImage(img_path)
+    display_svg('Images\\output\\output.svg')
+
+# File selection label
+image_label = tk.Label(left_frame, text="No file selected", bg="lightgray")
+image_label.pack(pady=10)
+
+# Select file button
+select_button = tk.Button(left_frame, text="Select Image", command=select_file)
+select_button.pack(pady=5)
+
+# Process button
+process_button = tk.Button(left_frame, text="Process Image", command=handle_process)
+process_button.pack(pady=5)
+
+# === Right Frame (SVG Preview) ===
+right_frame = tk.Frame(root, width=400, bg="white")
+right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+svg_canvas = tk.Label(right_frame, bg="white")
+svg_canvas.pack(expand=True)
+
+def display_svg(svg_path):
+    if not os.path.exists(svg_path):
+        return
+
+    # Convert SVG to PNG using cairosvg
+    png_path = "Images\\output\\preview.png"
+    cairosvg.svg2png(url=svg_path, write_to=png_path)
+
+    # Display PNG in tkinter
+    img = Image.open(png_path)
+    img = img.resize((400, 400), Image.LANCZOS)
+    photo = ImageTk.PhotoImage(img)
+
+    svg_canvas.config(image=photo)
+    svg_canvas.image = photo  # Keep reference
+
+# Run the app
+root.mainloop()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
