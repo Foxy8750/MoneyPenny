@@ -36,6 +36,7 @@ def processImage(image):
     ##Finds contours
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
+
     ##Draws contours onto blank canvas
     vectorized_image = np.zeros_like(img)
     cv2.drawContours(vectorized_image, contours, -1, (255, 255, 255), 1)
